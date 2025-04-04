@@ -369,6 +369,22 @@ fn main() {
 - zip 
 - cloned
 
+== 阶段回顾: 迭代器
+
+1. Iterator trait和 next 方法
+
+2. 迭代器的三种类型
+
+ - into_iter()，产生 T 类型
+ - iter()，产生 &T 类型。
+ - iter_mut()，产生 &mut T
+
+3. 迭代器的两类方法
+
+ - 消费适配器（consuming adaptors） 
+
+ - 迭代器适配器（iterator adaptors）
+
 = 智能指针
 
 指针（pointer）是一个包含内存地址的变量的通用概念。这个地址引用，或“指向”（points at）一些其他数据. Rust 中最常见的指针是第四章介绍的引用（reference）。引用以 `&` 符号为标志并借用了它们所指向的值。除了引用数据没有任何其他特殊功能，也没有额外开销。
@@ -376,6 +392,17 @@ fn main() {
 另一方面，智能指针（smart pointers）是一类数据结构，它们的表现类似指针，但是也拥有额外的元数据和功能。
 
 智能指针通常使用结构体实现。智能指针不同于结构体的地方在于其实现了 `Deref` 和 `Drop` trait。`Deref` trait 允许智能指针结构体实例表现的像引用一样，这样就可以编写既用于引用、又用于智能指针的代码。`Drop` trait 允许我们自定义当智能指针离开作用域时运行的代码。
+
+
+```rs
+
+
+```
+- Box\<T>
+- Deref / Dropping
+- Rc\<T> 
+- Cell / RefCell
+
 
 == Box\<T>
 
@@ -387,12 +414,33 @@ fn main() {
 - 当有大量数据并希望在确保数据不被拷贝的情况下转移所有权的时候
 - 当希望拥有一个值并只关心它的类型是否实现了特定 trait 而不是其具体类型的时候
 
-```rust
+
+#auto-two-column(
+  [```rust
+
+
+
+
+
+
 fn main() {
     let b = Box::new(5);
     println!("b = {}", b);
 }
-```
+```],[```c
+int main(){
+    int* b = 
+(int*)malloc(sizeof(int));
+    *b = 5;
+    printf("b = %d", b);
+    return 0;
+}
+```]
+)
+
+
+
+== Box 用于递归类型
 
 递归类型（recursive type）的值可以拥有另一个同类型的值作为其自身的一部分。但是这会产生一个问题，因为 Rust 需要在编译时知道类型占用多少空间。递归类型的值嵌套理论上可以无限地进行下去，所以 Rust 不知道递归类型需要多少空间。因为 box 有一个已知的大小，所以通过在循环类型定义中插入 box，就可以创建递归类型了。
 
@@ -431,8 +479,15 @@ fn main() {
 )
 
 
----
+
+
+
 ```rust
+
+
+
+
+
 struct MyBox<T>(T);
 
 impl<T> MyBox<T> {
@@ -462,6 +517,10 @@ impl<T> Deref for MyBox<T> {
         &self.0
     }
 }
+
+
+
+
 ```
 
 === 函数和方法的隐式 Deref 强制转换
@@ -471,6 +530,9 @@ Deref 强制转换（deref coercions）将实现了 `Deref` trait 的类型的�
 Deref 强制转换的加入使得 Rust 程序员编写函数和方法调用时无需增加过多显式使用 `&` 和 `*` 的引用和解引用。这个功能也使得我们可以编写更多同时作用于引用或智能指针的代码。
 
 ```rust
+
+
+
 fn hello(name: &str) {
     println!("Hello, {name}!");
 }
@@ -479,6 +541,13 @@ fn main() {
     let m = MyBox::new(String::from("Rust"));
     hello(&m);
 }
+
+
+
+
+
+
+
 ```
 
 === Drop trait
@@ -491,7 +560,6 @@ fn main() {
 struct CustomSmartPointer {
     data: String,
 }
-
 impl Drop for CustomSmartPointer {
     fn drop(&mut self) {
         println!("Dropping CustomSmartPointer with data `{}`!", self.data);
@@ -510,41 +578,46 @@ fn main() {
 ```
 
 ```rust
-fn main() {
-    let c = CustomSmartPointer {
-        data: String::from("some data"),
-    };
-    println!("CustomSmartPointer created.");
-    c.drop();
-    println!("CustomSmartPointer dropped before the end of main.");
-}
+
+
+
+
+
+
+
+
 ```
 
 === 这段代码不可运行
 
 ```rust
+#[derive(Debug)]
+struct Foo;
+
+impl Drop for Foo {
+    fn drop(&mut self) {
+        println!("Dropping Foo!")
+    }
+}
+
 fn main() {
-    let c = CustomSmartPointer {
-        data: String::from("some data"),
-    };
-    println!("CustomSmartPointer created.");
-    drop(c);
-    println!("CustomSmartPointer dropped before the end of main.");
+    let foo = Foo;
+    foo.drop();
+    println!("Running!:{:?}", foo);
 }
 ```
+== Rc\<T>
 
 大部分情况下所有权是非常明确的：可以准确地知道哪个变量拥有某个值。然而，有些情况单个值可能会有多个所有者。例如，在图数据结构中，多个边可能指向相同的节点，而这个节点从概念上讲为所有指向它的边所拥有。节点在没有任何边指向它从而没有任何所有者之前，都不应该被清理掉。
 
-为了启用多所有权需要显式地使用 Rust 类型 `Rc<T>`，其为引用计数（reference counting）的缩写。引用计数意味着记录一个值的引用数量来知晓这个值是否仍在被使用。如果某个值有零个引用，就代表没有任何有效引用并可以被清理。
+
 
 ```rust
 enum List {
     Cons(i32, Box<List>),
     Nil,
 }
-
 use crate::List::{Cons, Nil};
-
 fn main() {
     let a = Cons(5, Box::new(Cons(10, Box::new(Nil))));
     let b = Cons(3, Box::new(a));
@@ -552,7 +625,8 @@ fn main() {
 }
 ```
 
-`Cons` 成员拥有其储存的数据，所以当创建 b 列表时，`a` 被移动进了 `b` 这样 `b` 就拥有了 `a`。接着当再次尝试使用 `a` 创建 `c` 时，这不被允许，因为 `a` 的所有权已经被移动。
+为了启用多所有权需要显式地使用 Rust 类型 `Rc<T>`，其为引用计数（reference counting）的缩写。引用计数意味着记录一个值的引用数量来知晓这个值是否仍在被使用。如果某个值有零个引用，就代表没有任何有效引用并可以被清理。
+
 
 ```rust
 enum List {
@@ -591,7 +665,7 @@ fn main() {
 
 内部可变性（Interior mutability）是 Rust 中的一个设计模式，它允许你即使在有不可变引用时也可以改变数据，这通常是借用规则所不允许的。为了改变数据，该模式在数据结构中使用 `unsafe` 代码来模糊 Rust 通常的可变性和借用规则。不安全代码表明我们在手动检查这些规则而不是让编译器替我们检查。
 
-不同于 `Rc<T>`，`RefCell<T>` 代表其数据的唯一的所有权。那么是什么让 `RefCell<T>` 不同于像 `Box<T>` 这样的类型呢？回忆一下第四章所学的借用规则：
+不同于 `Rc<T>`，`RefCell<T>` 代表其数据的唯一的所有权。那么是什么让 `RefCell<T>` 不同于像 `Box<T>` 这样的类型呢？回忆一下之前所学的借用规则：
 
 1. 在任意给定时刻，只能拥有一个可变引用或任意数量的不可变引用之一（而不是两者）。
 2. 引用必须总是有效的。
@@ -651,6 +725,27 @@ fn main() {
 ```
 ]
 
+== 阶段回顾: 智能指针
+
+1. Deref trait 和 Drop trait
+
+2. 常用类型
+
+- Box\<T>
+
+- Rc\<T>
+
+- Arc\<T>
+
+-  Cell\<T>
+
+- RefCell\<T>
+
+
+
+
 = 对应 rustlings 练习
 
-余下
+- iterators
+- smart_pointers
+
