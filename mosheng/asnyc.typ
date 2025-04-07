@@ -13,7 +13,7 @@
     title: [2025春夏季开源操作系统训练营],
     subtitle: [基础阶段 - Rust编程],
     author: [殷金钰],
-    date: [2025年4月4日],
+    date: [2025年4月7日],
   ),
   config-common(new-section-slide-fn: none),
 )
@@ -51,8 +51,6 @@
 
 = 本节课程内容
 
-- 闭包与迭代器
-- 智能指针
 - Rust 并发编程
 - Rust 异步编程简介
 
@@ -68,20 +66,119 @@ Rust 语言中文社区：
 
 https://rustcc.cn/
 
-== 闭包
+= 并发编程
 
-Rust 的闭包（closures）是可以保存在一个变量中或作为参数传递给其他函数的匿名函数。可以在一个地方创建闭包，然后在不同的上下文中执行闭包运算。不同于函数，闭包允许捕获被定义时所在作用域中的值。
+并发编程（Concurrent programming），代表程序的不同部分相互独立地执行。并行编程（parallel programming）代表程序不同部分同时执行。并行包含于并发，并发包括并行。
 
-其本质是拥有可能关联上下文的匿名函数体。
+对于操作系统：
+
+- 进程是资源分配的基本单位
+- 线程是任务执行的基本单位
+
+并发编程（多线程）的目的：将一批任务分配给多个线程同时处理。
+
+
+== 什么是线程
+
+#columns([
+    - 线程是指令执行的上下文，以及对一些数据的引用关系（可能是共享的）。
+
+- 上下文包括一组寄存器的值、一个栈，以及其他与当前执行上下文相关的信息。
+
+- 每个程序至少有一个线程。
+
+- 有一个线程调度器 (scheduler)来管理线程的执行，决定什么时候运行哪个线程。
+
+- 程序可以创建新的线程，由调度器负责运行
+
+    #image( "images/thread.png")
+])
+
+
+
+== 使用 spawn 创建新线程 (子进程可能提前结束)
 
 ```rust
-let expensive_closure = |num: u32| -> u32 {
-    println!("calculating slowly...");
-    thread::sleep(Duration::from_secs(2));
-    num
-};
+use std::thread;
+use std::time::Duration;
+fn main() {
+    thread::spawn(|| {
+        for i in 1..10 {
+            println!("hi number {} from the spawned thread!", i);
+            thread::sleep(Duration::from_millis(1));
+        }
+    });
+    for i in 1..5 {
+        println!("hi number {} from the main thread!", i);
+        thread::sleep(Duration::from_millis(1));
+    }
+}
+```
+== 使用 spawn 创建新线程 (join等待)
+
+```rust
+use std::thread;
+use std::time::Duration;
+fn main() {
+    let handle = thread::spawn(|| {
+        for i in 1..10 {
+            println!("hi number {} from the spawned thread!", i);
+            thread::sleep(Duration::from_millis(1));
+        }
+    });
+    for i in 1..5 {
+        println!("hi number {} from the main thread!", i);
+        thread::sleep(Duration::from_millis(1));
+    }
+    handle.join().unwrap();
+}
 ```
 
+== 线程句柄
+
+- thread::spawn 返回 JoinHandler 类型的线程句柄 (handlers)
+
+- join() 会阻塞当前线程的执行，直到句柄对应的线程终止。
+
+-join() 返回对应线程返回值的 Ok，或者是发生恐慌时的参数的 Err。
+
+== 并发难点
+
+- 数据共享：如果两个线程同时试图改写同一份数据，会产生什么结果？
+
+- 数据竞争：同一段代码的行为与它的执行情况有关。
+
+```rs
+    let mut x = 0;
+    let  foo  = || {
+        let mut y = &mut x;
+        *y = 1;
+        println!("{}", *y);
+    };
+    let bar = || {
+        let mut z = &mut x;
+        *z = 2;
+        println!("{}", *z);
+    };
+```
+
+== 将 move 闭包与线程一同使用
+```rs
+use std::thread;
+
+fn main() {
+    let v = vec![1, 2, 3];
+
+    let handle = thread::spawn(move || {
+        println!("Here's a vector: {v:?}");
+    });
+
+    handle.join().unwrap();
+}
+```
+
+== 这么做会出现什么问题? 
+    
 == 为闭包的参数和返回值增加可选的类型注解
 
 ```rust
